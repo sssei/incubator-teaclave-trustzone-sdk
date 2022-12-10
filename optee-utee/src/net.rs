@@ -91,6 +91,91 @@ impl TcpStream {
     pub fn connect(address: &str, port: u16) -> std::io::Result<Self> {
         Self::connect_v4(address, port)
     }
+
+    pub fn listen(
+        address: &str,
+        port: u16,
+    ) -> std::io::Result<Self> {
+        use std::ffi::CString;
+        unsafe {
+            let addr = match CString::new(address) {
+                Ok(addr) => addr,
+                Err(_) => return Err(io::Error::new(ErrorKind::Other, "Invalid address")),
+            };
+            let mut handle: raw::TEE_iSocketHandle = ptr::null_mut();
+            let mut protocol_error: u32 = 0;
+            let mut setup = raw::TEE_tcpSocket_Setup {
+                ipVersion: raw::TEE_ipSocket_ipVersion::TEE_IP_VERSION_4,
+                server_addr: addr.as_ptr() as _,
+                server_port: port,
+            };
+            let ret = ((*raw::TEE_tcpSocket).listen)(
+                &mut handle,
+                &mut setup as *mut raw::TEE_tcpSocket_Setup as _,
+                &mut protocol_error,
+            );  
+            match ret {
+                raw::TEE_SUCCESS => Ok(Self { handle }),
+                raw::TEE_ERROR_CANCEL => {
+                    Err(io::Error::new(ErrorKind::Interrupted, "TEE_ERROR_CANCEL"))
+                }
+                raw::TEE_ERROR_OUT_OF_MEMORY => {
+                    Err(io::Error::new(ErrorKind::Other, "TEE_ERROR_OUT_OF_MEMORY"))
+                }
+                raw::TEE_ERROR_BAD_PARAMETERS => {
+                    Err(io::Error::new(ErrorKind::Other, "TEE_ERROR_BAD_PARAMETERS"))
+                }
+                raw::TEE_ISOCKET_ERROR_TIMEOUT => Err(io::Error::new(
+                    ErrorKind::TimedOut,
+                    "TEE_ISOCKET_ERROR_TIMEOUT",
+                )),
+                raw::TEE_ERROR_COMMUNICATION => Err(io::Error::new(
+                    ErrorKind::ConnectionAborted,
+                    "TEE_ERROR_COMMUNICATION",
+                )),
+                raw::TEE_ISOCKET_ERROR_PROTOCOL => Err(io::Error::new(
+                    ErrorKind::Other,
+                    "TEE_ISOCKET_ERROR_PROTOCOL",
+                )),
+                raw::TEE_ISOCKET_WARNING_PROTOCOL => Err(io::Error::new(
+                    ErrorKind::Other,
+                    format!("TEE_ISOCKET_WARNING_PROTOCOL: {}", protocol_error),
+                )),
+                _ => panic!("Unexpected return value"),                
+            }      
+        }
+    }  
+    
+    pub fn accept(&mut self) -> std::io::Result<()>{
+        unsafe{
+            let ret = ((*raw::TEE_tcpSocket).accept)(self.handle);
+            match ret {
+                raw::TEE_SUCCESS => Ok(()),
+                raw::TEE_ERROR_CANCEL => {
+                    Err(io::Error::new(ErrorKind::Interrupted, "TEE_ERROR_CANCEL"))
+                }
+                raw::TEE_ERROR_OUT_OF_MEMORY => {
+                    Err(io::Error::new(ErrorKind::Other, "TEE_ERROR_OUT_OF_MEMORY"))
+                }
+                raw::TEE_ERROR_BAD_PARAMETERS => {
+                    Err(io::Error::new(ErrorKind::Other, "TEE_ERROR_BAD_PARAMETERS"))
+                }
+                raw::TEE_ISOCKET_ERROR_TIMEOUT => Err(io::Error::new(
+                    ErrorKind::TimedOut,
+                    "TEE_ISOCKET_ERROR_TIMEOUT",
+                )),
+                raw::TEE_ERROR_COMMUNICATION => Err(io::Error::new(
+                    ErrorKind::ConnectionAborted,
+                    "TEE_ERROR_COMMUNICATION",
+                )),
+                raw::TEE_ISOCKET_ERROR_PROTOCOL => Err(io::Error::new(
+                    ErrorKind::Other,
+                    "TEE_ISOCKET_ERROR_PROTOCOL",
+                )),
+                _ => panic!("Unexpected return value"),                
+            }     
+        }
+    }
 }
 
 impl Drop for TcpStream {

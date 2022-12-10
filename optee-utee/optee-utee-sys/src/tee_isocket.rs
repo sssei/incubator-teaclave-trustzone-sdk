@@ -51,6 +51,14 @@ pub struct TEE_iSocket_s {
         buf: *mut c_void,
         length: *mut u32,
     ) -> TEE_Result,
+    pub listen: unsafe extern "C" fn(
+        ctx: *mut TEE_iSocketHandle,
+        setup: *mut c_void,
+        protocolError: *mut u32,
+    ) -> TEE_Result,
+    pub accept: unsafe extern "C" fn(
+        ctx: TEE_iSocketHandle
+    ) -> TEE_Result,
 }
 
 pub const TEE_ISOCKET_VERSION: u32 = 0x01000000;
